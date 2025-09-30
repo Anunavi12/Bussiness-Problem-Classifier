@@ -668,6 +668,7 @@ def extract_summary_and_takeaways(text):
                 return section
     
     return ""
+
 # -----------------------------
 # Session State Initialization
 # -----------------------------
@@ -1036,6 +1037,4 @@ elif st.session_state.current_page.startswith("dimension_"):
     st.markdown("---")
     if st.button("View Hardness Summary →", use_container_width=True):
         st.session_state.current_page = "hardness_summary"
-
         st.rerun()
-
