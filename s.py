@@ -632,7 +632,7 @@ def extract_pain_points(text):
     return "No pain points information found"
 
 def extract_summary_and_takeaways(text):
-    """Extract Summary from hardness_summary API, excluding Analysis sections"""
+    """Extract and format Summary as crisp bullet points supporting the classification"""
     if not text:
         return ""
     
@@ -646,28 +646,69 @@ def extract_summary_and_takeaways(text):
         r'\*\*Summary\*\*[:\s]*(.*?)(?=\Z)',
     ]
     
+    summary_text = ""
     for pattern in patterns:
         match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
             content = match.group(1).strip()
             if content and len(content) > 20:
-                return content
+                summary_text = content
+                break
     
-    # Look for "In conclusion" section
-    pattern2 = r'(?:In\s+conclusion|Summary)[:\s]*(.*?)(?=\Z)'
-    match = re.search(pattern2, text, re.DOTALL | re.IGNORECASE)
-    if match:
-        return match.group(1).strip()
+    # If no summary found, try "In conclusion"
+    if not summary_text:
+        pattern2 = r'(?:In\s+conclusion|Summary)[:\s]*(.*?)(?=\Z)'
+        match = re.search(pattern2, text, re.DOTALL | re.IGNORECASE)
+        if match:
+            summary_text = match.group(1).strip()
     
-    # Return last substantial section, avoiding scores
-    sections = [s.strip() for s in text.split('**') if s.strip() and len(s.strip()) > 50]
-    if sections:
-        # Filter out sections with scores
-        for section in reversed(sections):
-            if not re.search(r'\d+\.\d+\s*/\s*\d+', section) and not re.search(r'Score.*?=', section):
-                return section
+    # If still no summary, get last substantial section
+    if not summary_text:
+        sections = [s.strip() for s in text.split('**') if s.strip() and len(s.strip()) > 50]
+        if sections:
+            for section in reversed(sections):
+                if not re.search(r'\d+\.\d+\s*/\s*\d+', section) and not re.search(r'Score.*?=', section):
+                    summary_text = section
+                    break
     
-    return ""
+    if not summary_text:
+        return ""
+    
+    # Convert to crisp bullet points
+    # Extract numbered points or convert paragraphs to bullets
+    bullet_points = []
+    
+    # Try to find numbered points (1., 2., etc.)
+    numbered_pattern = r'\d+\.\s*\*\*([^*]+)\*\*[:\s]*([^\n]+(?:\n(?!\d+\.)[^\n]+)*)'
+    matches = re.findall(numbered_pattern, summary_text, re.MULTILINE)
+    
+    if matches:
+        for title, content in matches:
+            title = title.strip()
+            content = content.strip()
+            # Clean up content - remove extra whitespace
+            content = re.sub(r'\s+', ' ', content)
+            bullet_points.append(f"**{title}:** {content}")
+    else:
+        # Split by sentences or paragraphs
+        sentences = re.split(r'[.!?]\s+', summary_text)
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) > 30 and not re.search(r'\d+\.\d+\s*/\s*\d+', sentence):
+                # Clean up
+                sentence = re.sub(r'\s+', ' ', sentence)
+                if not sentence.endswith('.'):
+                    sentence += '.'
+                bullet_points.append(sentence)
+    
+    # Limit to 4-5 key points
+    bullet_points = bullet_points[:5]
+    
+    # Format as markdown bullets
+    if bullet_points:
+        return '\n\n'.join(f"• {point}" for point in bullet_points)
+    
+    return summary_text
 
 # -----------------------------
 # Session State Initialization
@@ -1037,4 +1078,5 @@ elif st.session_state.current_page.startswith("dimension_"):
     st.markdown("---")
     if st.button("View Hardness Summary →", use_container_width=True):
         st.session_state.current_page = "hardness_summary"
+
         st.rerun()
